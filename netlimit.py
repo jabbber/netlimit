@@ -19,14 +19,22 @@ def error(level,content,reason=None):
     else:
         sys.stderr.write('%s: %s\n'%(level, content))
 
-def iptables(command):
+class IptablesError(EOFError):
+    pass
+def iptables(rule, skip = [], warning = []):
     '''run iptables commands, return exit status and print to stderr when exit status not 0'''
     try:
-        out = subprocess.check_call(['iptables']+command)
+        output = subprocess.check_output(['iptables']+rule, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError, err:
-        error('warning',"run '%s' error with stat %d"%(' '.join(err.cmd),err.returncode))
-        return err.returncode
-    return 0
+        if err.returncode in skip:
+            return ''
+        elif err.returncode in warning:
+            error('warning', "run '%s' fail with exit stat %d"%(' '.join(err.cmd), err.returncode), err.output)
+            return ''
+        else:
+            error('error', "run '%s' fail with exit stat %d"%(' '.join(err.cmd), err.returncode), err.output)
+            raise IptablesError
+    return output
 
 def getLimit():
     mactab={}
@@ -36,15 +44,15 @@ def getLimit():
             line = line.strip()
             if line:
                 line = re.split('\s+', line)
-                if re.match('^([0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}$', line[0]):
-                    mac = line[0].upper()
-                    if re.match('^\d+$', line[1]):
-                        limit = int(line[1])
-                        mactab[mac] = limit
+                if re.match('^([0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}$', line[1]):
+                    mac = line[1].upper()
+                    if re.match('^\d+$', line[2]):
+                        limit = int(line[2])
+                        mactab[mac] = {'limit':limit,'name':line[0]}
                     else:
-                        error('warning', "'%s' syntax wrong in line %d'"%(tabfile,num+1), "illegal limit bytes '%s'."%line[1])
+                        error('warning', "'%s' syntax wrong in line %d'"%(tabfile,num+1), "illegal limit bytes '%s'."%line[2])
                 else:
-                    error('warning', "'%s' syntax wrong in line %d"%(tabfile,num+1), "illegal mac address '%s'."%line[0])
+                    error('warning', "'%s' syntax wrong in line %d"%(tabfile,num+1), "illegal mac address '%s'."%line[1])
     return mactab
 
 def getArp():
@@ -61,28 +69,36 @@ def getArp():
 
 def init():
     '''create user chain to monitor traffic'''
-    rules = []
     for chain in ('traffic-up','traffic-down'):
-        rules.append(['-N', chain])
-        rules.append(['-F', chain])
-    rules.append(['-D','FORWARD','-s',subnet,'-j','traffic-up'])
-    rules.append(['-D','FORWARD','-d',subnet,'-j','traffic-down'])
-    rules.append(['-I','FORWARD','-s',subnet,'-j','traffic-up'])
-    rules.append(['-I','FORWARD','-d',subnet,'-j','traffic-down'])
-    rules.append(['-A','traffic-up','-j','REJECT','--reject-with','icmp-net-prohibited'])
-    for rule in rules:
-        try:
-            subprocess.check_output(['iptables']+rule, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError, err:
-            if err.returncode != 1:
-                error('error', "run '%s' fail"%' '.join(err.cmd), err.output)
-                sys.exit(err.returncode)
+        iptables(['-N', chain],[1])
+    #skip exit 1 "iptables: No chain/target/match by that name."
+    iptables(['-D','FORWARD','-s',subnet,'-j','traffic-up'],[1])
+    iptables(['-D','FORWARD','-d',subnet,'-j','traffic-down'],[1])
+    iptables(['-I','FORWARD','-s',subnet,'-j','traffic-up'])
+    iptables(['-I','FORWARD','-d',subnet,'-j','traffic-down'])
+    iptables(['-D','traffic-up','-j','REJECT','--reject-with','icmp-net-prohibited'],[1])
+    iptables(['-A','traffic-up','-j','REJECT','--reject-with','icmp-net-prohibited'])
+
+def uninit():
+    '''del user chain to monitor traffic'''
+    #skip exit 2 "iptables v1.4.21: Couldn't load target `traffic-down':No such file or directory"
+    iptables(['-D','FORWARD','-s',subnet,'-j','traffic-up'],[2])
+    iptables(['-D','FORWARD','-d',subnet,'-j','traffic-down'],[2])
+    for chain in ('traffic-up','traffic-down'):
+        #skip "iptables: No chain/target/match by that name."
+        iptables(['-F', chain],[1])
+        iptables(['-X', chain],[1])
 
 def getUpChain():
     chain = 'traffic-up'
-    output = subprocess.check_output(['iptables','-L',chain,'-nv','--line-numbers']).strip().split('\n')
-    loc = re.split('\s+', output[1])
+    #worning exit 3 "iptables v1.4.21: can't initialize iptables table `filter': Permission denied (you must be root)"
+    output = iptables(['-L',chain,'-nv','--line-numbers'],warning = [3])
+    if not output:
+        return {}
+    else:
+        output = output.strip().split('\n')
     upinfo = {}
+    loc = re.split('\s+', output[1])
     for line in output[2:]:
         row = re.split('\s+', line)
         if re.match('^([0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}$', row[-1]):
@@ -92,9 +108,14 @@ def getUpChain():
 
 def getDownChain():
     chain = 'traffic-down'
-    output = subprocess.check_output(['iptables','-L',chain,'-nv','--line-numbers']).strip().split('\n')
-    loc = {name:num for num,name in enumerate(re.split('\s+', output[1].strip()))}
+    #worning exit 3 "iptables v1.4.21: can't initialize iptables table `filter': Permission denied (you must be root)"
+    output = iptables(['-L',chain,'-nv','--line-numbers'],warning = [3])
+    if not output:
+        return {}
+    else:
+        output = output.strip().split('\n')
     downinfo = {}
+    loc = {name:num for num,name in enumerate(re.split('\s+', output[1].strip()))}
     for line in output[2:]:
         row = re.split('\s+', line)
         if re.match('^([0-9]{1,3}.){3}[0-9]{1,3}$', row[loc['destination']]):
@@ -135,46 +156,65 @@ def getRate():
 
 def upCtrl():
     chain = 'traffic-up'
-    rules = []
     limittab = getLimit()
     upchain = getUpChain()
     ratetab = getRate()
     accept_mac = set()
     for mac in limittab:
-        if ratetab[mac]['up'] + ratetab[mac]['down'] < limittab[mac]:
+        if ratetab[mac]['up'] + ratetab[mac]['down'] < limittab[mac]['limit']:
             accept_mac.add(mac)
     delmac = set(upchain.keys()).difference(accept_mac)
     for mac in delmac:
-        rules.append(['-D',chain,'-m','mac','--mac-source',mac,'-j','RETURN'])
+        iptables(['-D',chain,'-m','mac','--mac-source',mac,'-j','RETURN'])
     newmac = accept_mac.difference(set(upchain.keys()))
     for mac in newmac:
-        rules.append(['-I',chain,'-m','mac','--mac-source',mac,'-j','RETURN'])
-    for rule in rules:
-        try:
-            subprocess.check_output(['iptables']+rule, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError, err:
-            error('error', "run '%s' fail"%' '.join(err.cmd), err.output)
+        iptables(['-I',chain,'-m','mac','--mac-source',mac,'-j','RETURN'])
 
 def downCtrl():
     chain = 'traffic-down'
-    rules = []
     monitor_mac = getLimit().keys()
     downchain = getDownChain()
     arptab = getArp()
     ips = [arptab[mac] for mac in arptab if mac in monitor_mac]
     for ip in ips:
         if not downchain.has_key(ip):
-            rules.append(['-A',chain,'-d',ip,'-j','RETURN'])
-    for rule in rules:
-        try:
-            subprocess.check_output(['iptables']+rule, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError, err:
-            error('error', "run '%s' fail"%' '.join(err.cmd), err.output)
+            iptables(['-A',chain,'-d',ip,'-j','RETURN'])
+    for ip in downchain:
+        if not ip in ips:
+            iptables(['-D',chain,'-d',ip,'-j','RETURN'])
 
-init()
-while True:
-    upCtrl()
-    downCtrl()
-    print getRate()
-    time.sleep(1)
+def printRate():
+    rate = getRate()
+    limit = getLimit()
+    arp = getArp()
+    print "name\tmac_address\tip_address\tup_bytes\tdown_bytes"
+    for mac in limit:
+        if arp.has_key(mac):
+            ip = arp[mac]
+        else:
+            ip = 'not alive'
+        print "%s\t%s\t%s\t%d\t%d"%(limit[mac]['name'], mac, ip, rate[mac]['up'], rate[mac]['down'])
 
+def printHelp():
+    print '''usage:
+    start       start daemon
+    stop        stop daemon
+    status      show status and rate
+'''
+
+if len(sys.argv) > 1:
+    if sys.argv[1] == 'start':
+        init()
+        while True:
+            upCtrl()
+            downCtrl()
+            exit()
+            time.sleep(1)
+    elif sys.argv[1] == 'stop':
+        uninit()
+    elif sys.argv[1] == 'status':
+        printRate()
+    else:
+        printHelp()
+else:
+    printHelp()
