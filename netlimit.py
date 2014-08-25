@@ -92,7 +92,8 @@ def uninit():
 def getUpChain():
     chain = 'traffic-up'
     #worning exit 3 "iptables v1.4.21: can't initialize iptables table `filter': Permission denied (you must be root)"
-    output = iptables(['-L',chain,'-nv','--line-numbers'],warning = [3])
+    #worning exit 1 "iptables: No chain/target/match by that name."
+    output = iptables(['-L',chain,'-nv','--line-numbers'],warning = [1,3])
     if not output:
         return {}
     else:
@@ -109,7 +110,8 @@ def getUpChain():
 def getDownChain():
     chain = 'traffic-down'
     #worning exit 3 "iptables v1.4.21: can't initialize iptables table `filter': Permission denied (you must be root)"
-    output = iptables(['-L',chain,'-nv','--line-numbers'],warning = [3])
+    #worning exit 1 "iptables: No chain/target/match by that name."
+    output = iptables(['-L',chain,'-nv','--line-numbers'],warning = [1,3])
     if not output:
         return {}
     else:
@@ -132,7 +134,7 @@ def getRate():
     upChain = getUpChain()
     downChain = getDownChain()
     arptab = getArp()
-    for mac in getLimit():
+    for mac in upChain:
         if not ratetab.has_key(mac):
             ratetab[mac] = {'up':0,'o_up':0,'down':0,'o_down':0}
         if upChain.has_key(mac):
@@ -154,6 +156,10 @@ def getRate():
         pickle.dump(ratetab,f)
     return ratetab
 
+def clearRate():
+    with open(ratefile,'w') as f:
+        pickle.dump({},f)
+
 def upCtrl():
     chain = 'traffic-up'
     limittab = getLimit()
@@ -161,14 +167,19 @@ def upCtrl():
     ratetab = getRate()
     accept_mac = set()
     for mac in limittab:
-        if ratetab[mac]['up'] + ratetab[mac]['down'] < limittab[mac]['limit']:
+        if ratetab.has_key(mac):
+            if ratetab[mac]['up'] + ratetab[mac]['down'] < limittab[mac]['limit']:
+                accept_mac.add(mac)
+        else:
             accept_mac.add(mac)
+            
     delmac = set(upchain.keys()).difference(accept_mac)
     for mac in delmac:
         iptables(['-D',chain,'-m','mac','--mac-source',mac,'-j','RETURN'])
     newmac = accept_mac.difference(set(upchain.keys()))
     for mac in newmac:
-        iptables(['-I',chain,'-m','mac','--mac-source',mac,'-j','RETURN'])
+        #worning exit 3 "iptables v1.4.21: can't initialize iptables table `filter': Permission denied (you must be root)"
+        iptables(['-I',chain,'-m','mac','--mac-source',mac,'-j','RETURN'],[3])
 
 def downCtrl():
     chain = 'traffic-down'
@@ -178,7 +189,8 @@ def downCtrl():
     ips = [arptab[mac] for mac in arptab if mac in monitor_mac]
     for ip in ips:
         if not downchain.has_key(ip):
-            iptables(['-A',chain,'-d',ip,'-j','RETURN'])
+            #worning exit 3 "iptables v1.4.21: can't initialize iptables table `filter': Permission denied (you must be root)"
+            iptables(['-A',chain,'-d',ip,'-j','RETURN'],[3])
     for ip in downchain:
         if not ip in ips:
             iptables(['-D',chain,'-d',ip,'-j','RETURN'])
@@ -192,8 +204,14 @@ def printRate():
         if arp.has_key(mac):
             ip = arp[mac]
         else:
-            ip = 'not alive'
-        print "%s\t%s\t%s\t%d\t%d"%(limit[mac]['name'], mac, ip, rate[mac]['up'], rate[mac]['down'])
+            ip = 'not_alive'
+        if rate.has_key(mac):
+            up = rate[mac]['up']
+            down = rate[mac]['down']
+        else:
+            up = 'not_trace'
+            down = 'not_trace'
+        print "%s\t%s\t%s\t%s\t%s"%(limit[mac]['name'], mac, ip, up, down)
 
 def printHelp():
     print '''usage:
@@ -208,6 +226,10 @@ if len(sys.argv) > 1:
         while True:
             upCtrl()
             downCtrl()
+            #(tm_year,tm_mon,tm_mday,tm_hour,tm_min,
+            #tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
+            #if tm_mday == 1:
+            #    clearRate()
             exit()
             time.sleep(1)
     elif sys.argv[1] == 'stop':
