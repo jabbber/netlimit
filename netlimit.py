@@ -126,6 +126,7 @@ def getDownChain():
     return downinfo
 
 def getRate():
+    '''sum current rate'''
     if os.path.isfile(ratefile):
         with open(ratefile,'r') as f:
             ratetab = pickle.load(f)
@@ -152,6 +153,10 @@ def getRate():
                     downbyte = int(downChain[arptab[mac]]['bytes']) - ratetab[mac]['o_down']
                 ratetab[mac]['down'] += downbyte
                 ratetab[mac]['o_down'] = int(downChain[arptab[mac]]['bytes'])
+    return ratetab
+
+def sumRate():
+    ratetab = getRate()
     with open(ratefile,'w') as f:
         pickle.dump(ratetab,f)
     return ratetab
@@ -164,7 +169,7 @@ def upCtrl():
     chain = 'traffic-up'
     limittab = getLimit()
     upchain = getUpChain()
-    ratetab = getRate()
+    ratetab = sumRate()
     accept_mac = set()
     for mac in limittab:
         if ratetab.has_key(mac):
