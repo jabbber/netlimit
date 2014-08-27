@@ -47,7 +47,7 @@ def getLimit():
             line = line.strip()
             if line:
                 line = re.split('\s+', line)
-                if re.match('^([0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}$', line[1]):
+                if re.match('^(?:[0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}$', line[1]):
                     mac = line[1].upper()
                     if re.match('^\d+$', line[2]):
                         limit = int(line[2])
@@ -64,7 +64,7 @@ def getArp():
         for line in arp.readlines():
             line = line.strip()
             line = re.split('\s+', line)
-            if re.match('^([0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}$', line[3]):
+            if re.match('^(?:[0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}$', line[3]):
                 mac = line[3].upper()
                 ip = line[0]
                 arptab[mac] = ip
@@ -106,13 +106,13 @@ def getUpChain():
     upinfo = {}
     loc = re.split('\s+', output[1])
     for line in output[2:]:
-        row = re.split('\s+', line)
-        if re.match('^([0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}$', row[-1]):
-            if not upinfo.has_key(row[-1]):
-                #upinfo[row[-1]] = {name:row[num] for num,name in enumerate(loc)}
-                upinfo[row[-1]] = {}
+        mac_find = re.findall('(?:[0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}', line)
+        if mac_find:
+            row = re.split('\s+', line)
+            if not upinfo.has_key(mac_find[0]):
+                upinfo[mac_find[0]] = {}
                 for num,name in enumerate(loc):
-                    upinfo[row[-1]][name] = row[num]
+                    upinfo[mac_find[0]][name] = row[num]
     return upinfo
 
 def getDownChain():
@@ -181,10 +181,10 @@ def sumExtra():
             ratetab = pickle.load(f)
     else:
         ratetab = {}
-    limittab = getlimit()
+    limittab = getLimit()
     for mac in limittab:
         if ratetab.has_key(mac):
-            ratetab[mac]['extra'] = limittab[mac]['limit'] - ratetab['up'] - ratetab['down']
+            ratetab[mac]['extra'] += limittab[mac]['limit'] - ratetab[mac]['up'] - ratetab[mac]['down']
             ratetab[mac]['up'] = 0
             ratetab[mac]['down'] = 0
     with open(ratefile,'w') as f:
@@ -196,7 +196,7 @@ def addExtra(mac,num):
             ratetab = pickle.load(f)
     else:
         ratetab = {}
-    limittab = getlimit()
+    limittab = getLimit()
     if ratetab.has_key(mac) and limittab.has_key(mac):
         ratetab[mac]['extra'] += num
     else:
@@ -268,7 +268,7 @@ def printRate():
     rate = getRate()
     limit = getLimit()
     arp = getArp()
-    print "name\tmac_address\tip_address\tup_bytes\tdown_bytes\tleft_bytes"
+    print "name\tmac_address     \tip_address\tup\tdown\tquota"
     for mac in limit:
         if arp.has_key(mac):
             ip = arp[mac]
@@ -281,7 +281,7 @@ def printRate():
             up = 'not_trace'
             down = 'not_trace'
         left_bytes = (limit[mac]['limit'] + rate[mac]['extra'] - up - down)
-        print "%s\t%s\t%s\t%s\t%s\t%s"%(limit[mac]['name'], mac, ip, up, down,left_bytes)
+        print "%s\t%s\t%s\t%s\t%s\t%s+%s"%(limit[mac]['name'], mac, ip, up, down,limit[mac]['limit'],rate[mac]['extra'])
 
 def printHelp():
     print '''usage:
@@ -327,6 +327,18 @@ if len(sys.argv) > 1:
         uninit()
     elif sys.argv[1] == 'status':
         printRate()
+    elif sys.argv[1] == 'add':
+        if len(sys.argv) == 4:
+            if getLimit().has_key(sys.argv[2]):
+                try:
+                    quota = int(sys.argv[3])
+                except:
+                    print "'%s' is not a integer."%sys.argv[3]
+                    sys.exit(2)
+                addExtra(sys.argv[2],quota)
+        else:
+            print "'%s' in not in limit.tab."
+            sys.exit(1)
     else:
         printHelp()
 else:
