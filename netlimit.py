@@ -3,23 +3,36 @@
 #author: jabber zhou
 import os,sys
 import re
-#import subprocess
 import commands
 import pickle
 import time
 import traceback
+import signal
 
 subnet = '192.168.122.0/24'
+pidfile = '/var/run/netlimit.pid'
 
 rundir=os.path.realpath(os.path.dirname(unicode(__file__, sys.getfilesystemencoding( ))))
+logfile=os.path.join(rundir,'netlimit.log')
 tabfile=os.path.join(rundir,'limit.tab')
 ratefile=os.path.join(rundir,'rate.db')
+daemon = 0
 
 def error(level,content,reason=None):
-    if reason:
-        sys.stderr.write('%s: %s,\n%s\n'%(level, content, reason))
+    global daemon
+    if daemon:
+        if reason:
+            sys.stderr.write('%s %s: %s,\n%s\n'%(time.ctime(),level, content, reason))
+        else:
+            sys.stderr.write('%s %s: %s\n'%(time.ctime(),level, content))
     else:
-        sys.stderr.write('%s: %s\n'%(level, content))
+        if reason:
+            sys.stderr.write('%s: %s,\n%s\n'%(level, content, reason))
+        else:
+            sys.stderr.write('%s: %s\n'%(level, content))
+
+def log(level,content):
+    open(logfile,'a+').write("%s %s: %s\n"%(time.ctime(), level, content))
 
 class IptablesError(EOFError):
     pass
@@ -139,6 +152,15 @@ def getDownChain():
                     downinfo[row[loc['destination']]][name] = row[loc[name]]
     return downinfo
 
+def isMonitor():
+    for chain in ('traffic-up,','traffic-down'):
+        upchain = iptables(['-L',chain,'-nv','--line-numbers'],[1],warning = [3])
+        downchain = iptables(['-L',chain,'-nv','--line-numbers'],[1],warning = [3])
+    if upchain or downchain:
+        return True
+    else:
+        return False
+
 def getRate():
     '''sum current rate'''
     if os.path.isfile(ratefile):
@@ -199,11 +221,12 @@ def addExtra(mac,num):
     limittab = getLimit()
     if ratetab.has_key(mac) and limittab.has_key(mac):
         ratetab[mac]['extra'] += num
+        with open(ratefile,'w') as f:
+            pickle.dump(ratetab,f)
+        log('info',"add %d to %s[%s]"%(num,limittab[mac]['name'],mac))
     else:
         error('error',"mac address '%s' is not exist."%mac)
         return 1
-    with open(ratefile,'w') as f:
-        pickle.dump(ratetab,f)
 
 def clearRate():
     with open(ratefile,'w') as f:
@@ -268,7 +291,7 @@ def printRate():
     rate = getRate()
     limit = getLimit()
     arp = getArp()
-    print "name\tmac_address     \tip_address\tup\tdown\tquota"
+    print("name\tmac_address     \tip_address\tup\tdown\tquota")
     for mac in limit:
         if arp.has_key(mac):
             ip = arp[mac]
@@ -281,14 +304,7 @@ def printRate():
             up = 'not_trace'
             down = 'not_trace'
         left_bytes = (limit[mac]['limit'] + rate[mac]['extra'] - up - down)
-        print "%s\t%s\t%s\t%s\t%s\t%s+%s"%(limit[mac]['name'], mac, ip, up, down,limit[mac]['limit'],rate[mac]['extra'])
-
-def printHelp():
-    print '''usage:
-    start       start daemon
-    stop        stop daemon
-    status      show status and rate
-'''
+        print("%s\t%s\t%s\t%s\t%s\t%s+%s"%(limit[mac]['name'], mac, ip, up, down,limit[mac]['limit'],rate[mac]['extra']))
 
 class FlagJob:
     '''try to do some thing when flag change'''
@@ -303,28 +319,127 @@ class FlagJob:
             except:
                 error('error',traceback.print_exc())
 
-if len(sys.argv) > 1:
-    if sys.argv[1] == 'start':
+def keepPid():
+    if os.path.isfile(pidfile):
+        try:
+            pid = int(open(pidfile).read().strip())
+        except:
+            pid = None
+        if pid:
+            if os.getpid() != pid:
+                if isDaemon(pidfile):
+                    error('error',"'%s' is not match, current pid is %d, but %d in pidfile."%(pidfile,os.getpid(),pid))
+                    error('error',"daemon is already running, this process stop.")
+                    sys.exit(5)
+    try:
+        open(pidfile,'w').write(str(os.getpid())+'\n')
+    except:
+        error('error',traceback.print_exc())
+        error('error',"can not write %s, process stop"%pidfile)
+        sys.exit(4)
+
+def isDaemon():
+    if os.path.isfile(pidfile):
+        try:
+            pid = int(open(pidfile).read().strip())
+        except:
+            pid = None
+        if pid:
+            if os.path.isdir('/proc/%d'%pid):
+                return True
+    return False
+
+def stopDaemon():
+    if isDaemon():
+        pid = int(open(pidfile).read().strip())
+        try:
+            os.kill(pid,15)
+            os.remove(pidfile)
+        except:
+            pass
+    else:
+        error('warning',"daemon not running.")
+    print 'stopping...'
+    n = 0
+    while isDaemon():
+        n += 1
+        time.sleep()
+        if n > 10:
+            error('error',"stop fail,process %s is still alive."%pid)
+            sys.exit(7)
+    if os.path.isfile(pidfile):
+        os.remove(pidfile)
+    if isMonitor():
+        sumRate()
+    uninit()
+
+def startDaemon():
+    if isDaemon():
+        print("netlimit is already running.")
+        sys.exit(0)
+
+    pid = os.fork()
+    if pid:
+        def onSigChld(*args):
+            print('start fail!')
+            sys.exit(1)
+        signal.signal(signal.SIGCHLD, onSigChld)
+        print('starting...')
+        n = 0
+        while os.path.isdir('/proc/%d'%pid):
+            n += 1
+            if n > 10:
+                break
+            if isDaemon():
+                print("start success!")
+                sys.exit(0)
+            time.sleep(1)
+        print('start time out!')
+        sys.exit(1)
+    os.setsid()
+    sys.stdin = open('/dev/null')
+    sys.stdout = open(logfile,'a+')
+    sys.stderr = open(logfile,'a+')
+    global daemon
+    daemon = 1
+
+    (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
+    tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
+    clear = FlagJob(clearRate,tm_mon)
+    sum_extra = FlagJob(sumExtra,tm_mday)
+    store = FlagJob(sumRate,tm_min)
+    up_ctrl = FlagJob(upCtrl,tm_sec)
+    down_ctrl = FlagJob(downCtrl,tm_sec)
+    init()
+    print 123
+    error('info',"netlimit has been started.")
+    while True:
         (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
         tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
-        clear = FlagJob(clearRate,tm_mon)
-        sum_extra = FlagJob(sumExtra,tm_mday)
-        store = FlagJob(sumRate,tm_min)
-        up_ctrl = FlagJob(upCtrl,tm_sec)
-        down_ctrl = FlagJob(downCtrl,tm_sec)
-        init()
-        while True:
-            (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
-            tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
-            store.do(tm_min)
-            clear.do(tm_mon)
-            sum_extra.do(tm_mday)
-            up_ctrl.do(tm_sec)
-            down_ctrl.do(tm_sec)
-            time.sleep(1)
+        store.do(tm_min)
+        clear.do(tm_mon)
+        sum_extra.do(tm_mday)
+        up_ctrl.do(tm_sec)
+        down_ctrl.do(tm_sec)
+        keepPid()
+        time.sleep(1)
+
+def printHelp():
+    print('''usage:
+    start       start daemon
+    stop        stop daemon
+    restart     stop and start daemon
+    status      show status and rate
+''')
+
+if len(sys.argv) > 1:
+    if sys.argv[1] == 'start':
+        startDaemon()
     elif sys.argv[1] == 'stop':
-        sumRate()
-        uninit()
+        stopDaemon()
+    elif sys.argv[1] == 'restart':
+        stopDaemon()
+        startDaemon()
     elif sys.argv[1] == 'status':
         printRate()
     elif sys.argv[1] == 'add':
@@ -333,11 +448,11 @@ if len(sys.argv) > 1:
                 try:
                     quota = int(sys.argv[3])
                 except:
-                    print "'%s' is not a integer."%sys.argv[3]
+                    print("'%s' is not a integer."%sys.argv[3])
                     sys.exit(2)
                 addExtra(sys.argv[2],quota)
         else:
-            print "'%s' in not in limit.tab."
+            print("'%s' in not in limit.tab.")
             sys.exit(1)
     else:
         printHelp()
