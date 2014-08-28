@@ -367,7 +367,7 @@ def keepPid():
             pid = None
         if pid:
             if os.getpid() != pid:
-                if isDaemon(pidfile):
+                if isDaemon():
                     error('error',"'%s' is not match, current pid is %d, but %d in pidfile."%(pidfile,os.getpid(),pid))
                     error('error',"daemon is already running, this process stop.")
                     sys.exit(5)
@@ -446,7 +446,7 @@ def startDaemon():
 
     init()
     upCtrl()
-    down_Ctrl()
+    downCtrl()
 
     os.setsid()
     devnull = os.open('/dev/null',os.O_RDWR)
