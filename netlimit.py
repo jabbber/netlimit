@@ -437,6 +437,17 @@ def startDaemon():
             time.sleep(0.1)
         print("start success!")
         sys.exit(0)
+
+    try:
+        getLimit()
+    except:
+        error('error',traceback.print_exc())
+        sys.exit(4)
+
+    init()
+    upCtrl()
+    down_Ctrl()
+
     os.setsid()
     devnull = os.open('/dev/null',os.O_RDWR)
     logop = open(logfile,'a',1)
@@ -455,7 +466,6 @@ def startDaemon():
     store = FlagJob(sumRate,tm_min)
     up_ctrl = FlagJob(upCtrl,tm_sec)
     down_ctrl = FlagJob(downCtrl,tm_sec)
-    init()
     error('info',"netlimit has been started.")
     while True:
         (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
