@@ -16,6 +16,7 @@ rundir=os.path.realpath(os.path.dirname(unicode(__file__, sys.getfilesystemencod
 logfile=os.path.join(rundir,'netlimit.log')
 tabfile=os.path.join(rundir,'limit.tab')
 ratefile=os.path.join(rundir,'rate.db')
+hratefile=os.path.join(rundir,'hrate.db')
 daemon = 0
 
 def error(level,content,reason=None):
@@ -45,6 +46,8 @@ def iptables(rule, skip = [], warning = []):
     (status, output) = commands.getstatusoutput(cmd)
     status = status/256
     if not status:
+        if cmd.find('-L') < 0:
+            error('info',"change iptabls rules: '%s'"%cmd)
         return output
     elif status in skip:
         return ''
@@ -200,6 +203,37 @@ def sumRate():
         pickle.dump(ratetab,f)
     return ratetab
 
+def saveHRate(ratetab):
+    (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
+    tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
+    if os.path.isfile(hratefile):
+        with open(hratefile,'r') as f:
+            hratetab = pickle.load(f)
+    else:
+        hratetab = {}
+    hratetab["%d-%d"%(tm_mon,tm_mday)] = ratetab
+    with open(hratefile,'w') as f:
+        pickle.dump(hratetab,f)
+
+def printHRate(mon,mday):
+    if os.path.isfile(hratefile):
+        with open(hratefile,'r') as f:
+            hratetab = pickle.load(f)
+    else:
+        hratetab = {}
+    limittab = getLimit()
+    if hratetab.has_key("%d-%d"%(mon,mday)):
+        print("name\tmac_address     \tup\tdown\ttotal")
+        ratetab = hratetab["%d-%d"%(mon,mday)]
+        for mac in ratetab:
+            if limittab.has_key(mac):
+                name = limittab[mac]['name']
+            else:
+                name = 'none'
+            print("%s\t%s\t%s\t%s\t%s"%(name, mac, ratetab[mac]['up'], ratetab[mac]['down'],ratetab[mac]['up']+ratetab[mac]['down']))
+    else:
+        print('no data in %d-%d'%(mon,mday))
+
 def sumExtra():
     if os.path.isfile(ratefile):
         with open(ratefile,'r') as f:
@@ -207,11 +241,14 @@ def sumExtra():
     else:
         ratetab = {}
     limittab = getLimit()
+    saveHRate(ratetab)
     for mac in limittab:
         if ratetab.has_key(mac):
-            ratetab[mac]['extra'] += limittab[mac]['limit'] - ratetab[mac]['up'] - ratetab[mac]['down']
+            num = limittab[mac]['limit'] - ratetab[mac]['up'] - ratetab[mac]['down']
+            ratetab[mac]['extra'] += num
             ratetab[mac]['up'] = 0
             ratetab[mac]['down'] = 0
+            error('info',"auto add extra %d bytes to %s[%s]"%(num,limittab[mac]['name'],mac))
     with open(ratefile,'w') as f:
         pickle.dump(ratetab,f)
 
@@ -226,7 +263,7 @@ def addExtra(mac,num):
         ratetab[mac]['extra'] += num
         with open(ratefile,'w') as f:
             pickle.dump(ratetab,f)
-        log('info',"add %d to %s[%s]"%(num,limittab[mac]['name'],mac))
+        log('info',"add extra %d bytes to %s[%s]"%(num,limittab[mac]['name'],mac))
     else:
         error('error',"mac address '%s' is not exist."%mac)
         return 1
@@ -449,6 +486,18 @@ if len(sys.argv) > 1:
         startDaemon()
     elif sys.argv[1] == 'status':
         printRate()
+    elif sys.argv[1] == 'hrate':
+        if len(sys.argv) == 4:
+            try:
+                mon = int(sys.argv[2])
+                mday = int(sys.argv[3])
+            except:
+                print("hrate need two number as month and mday")
+                sys.exit(1)
+            printHRate(mon,mday)
+        else:
+            print("hrate need two number as month and mday")
+            sys.exit(1)
     elif sys.argv[1] == 'add':
         if len(sys.argv) == 4:
             if getLimit().has_key(sys.argv[2]):
@@ -461,7 +510,7 @@ if len(sys.argv) > 1:
             else:
                 print("'%s'is not a mac address exist in limit.tab"%sys.argv[2])
         else:
-            print("'%s' in not in limit.tab.")
+            print("'add' need a mac address and a num of bytes")
             sys.exit(1)
     else:
         printHelp()
