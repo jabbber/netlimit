@@ -22,17 +22,20 @@ def error(level,content,reason=None):
     global daemon
     if daemon:
         if reason:
-            sys.stderr.write('%s %s: %s,\n%s\n'%(time.ctime(),level, content, reason))
+            sys.stderr.write('%s netlimit[%d]%s: %s,\n%s\n'%(time.ctime(),os.getpid(),level, content, reason))
         else:
-            sys.stderr.write('%s %s: %s\n'%(time.ctime(),level, content))
+            sys.stderr.write('%s netlimit[%d]%s: %s\n'%(time.ctime(),os.getpid(),level, content))
     else:
         if reason:
             sys.stderr.write('%s: %s,\n%s\n'%(level, content, reason))
         else:
             sys.stderr.write('%s: %s\n'%(level, content))
 
-def log(level,content):
-    open(logfile,'a+').write("%s %s: %s\n"%(time.ctime(), level, content))
+def log(level,content,pid=None):
+    if pid:
+        open(logfile,'a+').write("%s netlimit[%d]%s: %s\n"%(time.ctime(), pid, level, content))
+    else:
+        open(logfile,'a+').write("%s %s: %s\n"%(time.ctime(), level, content))
 
 class IptablesError(EOFError):
     pass
@@ -351,7 +354,9 @@ def isDaemon():
 
 def stopDaemon():
     if isDaemon():
+        print 'stopping...'
         pid = int(open(pidfile).read().strip())
+        log('info',"daemon stoping...",pid)
         try:
             os.kill(pid,15)
             os.remove(pidfile)
@@ -359,19 +364,20 @@ def stopDaemon():
             pass
     else:
         error('warning',"daemon not running.")
-    print 'stopping...'
     n = 0
     while isDaemon():
         n += 1
         time.sleep()
         if n > 10:
-            error('error',"stop fail,process %s is still alive."%pid)
+            error('error',"stop fail,process %d is still alive."%pid)
             sys.exit(7)
     if os.path.isfile(pidfile):
         os.remove(pidfile)
     if isMonitor():
         sumRate()
+        log('info',"current rate has been store")
     uninit()
+    print 'stop success!'
 
 def startDaemon():
     if isDaemon():
@@ -380,26 +386,28 @@ def startDaemon():
 
     pid = os.fork()
     if pid:
-        def onSigChld(*args):
+        def onSigChld(num,inter):
             print('start fail!')
             sys.exit(1)
         signal.signal(signal.SIGCHLD, onSigChld)
         print('starting...')
         n = 0
-        while os.path.isdir('/proc/%d'%pid):
+        while not isDaemon():
             n += 1
-            if n > 10:
-                break
-            if isDaemon():
-                print("start success!")
-                sys.exit(0)
-            time.sleep(1)
-        print('start time out!')
-        sys.exit(1)
+            if n > 100:
+                print('start time out!')
+                sys.exit(1)
+            time.sleep(0.1)
+        print("start success!")
+        sys.exit(0)
     os.setsid()
-    sys.stdin = open('/dev/null')
-    sys.stdout = open(logfile,'a+')
-    sys.stderr = open(logfile,'a+')
+    devnull = os.open('/dev/null',os.O_RDWR)
+    logop = open(logfile,'a',1)
+    os.dup2(devnull,0)
+    os.dup2(logop.fileno(),1)
+    os.dup2(logop.fileno(),2)
+    os.close(devnull)
+    del devnull,logop
     global daemon
     daemon = 1
 
@@ -411,7 +419,6 @@ def startDaemon():
     up_ctrl = FlagJob(upCtrl,tm_sec)
     down_ctrl = FlagJob(downCtrl,tm_sec)
     init()
-    print 123
     error('info',"netlimit has been started.")
     while True:
         (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
@@ -451,6 +458,8 @@ if len(sys.argv) > 1:
                     print("'%s' is not a integer."%sys.argv[3])
                     sys.exit(2)
                 addExtra(sys.argv[2],quota)
+            else:
+                print("'%s'is not a mac address exist in limit.tab"%sys.argv[2])
         else:
             print("'%s' in not in limit.tab.")
             sys.exit(1)
