@@ -496,6 +496,12 @@ if len(sys.argv) > 1:
         startDaemon()
     elif sys.argv[1] == 'status':
         printRate()
+        if isDaemon():
+            print('daemon is alive!')
+            sys.exit(0)
+        else:
+            print('daemon is dead!')
+            sys.exit(1)
     elif sys.argv[1] == 'hrate':
         if len(sys.argv) == 4:
             try:
