@@ -62,6 +62,13 @@ def getLimit():
     mactab={}
     with open(tabfile) as tab:
         for (num, line) in enumerate(tab.readlines()):
+            try:
+                line = line.decode('utf-8')
+            except:
+                try:
+                    line = line.decode('gbk')
+                except:
+                    pass
             line = line.split('#')[0]
             line = line.strip()
             if line:
