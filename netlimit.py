@@ -351,7 +351,8 @@ def printRate():
             up = 'not_trace'
             down = 'not_trace'
         left_bytes = (limit[mac]['limit'] + rate[mac]['extra'] - up - down)
-        print("%s\t%s\t%s\t%s\t%s\t%s+%s"%(limit[mac]['name'], mac, ip, up, down,limit[mac]['limit'],rate[mac]['extra']))
+        output = "%s\t%s\t%s\t%s\t%s\t%s+%s"%(limit[mac]['name'], mac, ip, up, down,limit[mac]['limit'],rate[mac]['extra'])
+        print(output.encode('utf-8'))
 
 class FlagJob:
     '''try to do some thing when flag change'''
