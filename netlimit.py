@@ -69,6 +69,7 @@ def getLimit():
                     line = line.decode('gbk')
                 except:
                     pass
+            line = line.encode('utf-8')
             line = line.split('#')[0]
             line = line.strip()
             if line:
@@ -338,7 +339,7 @@ def printRate():
     rate = getRate()
     limit = getLimit()
     arp = getArp()
-    print("name\tmac_address     \tip_address\tup\tdown\tquota")
+    print("name\tmac_address     \tip_address\tup\tdown\tquota\tleft_quota")
     for mac in limit:
         if arp.has_key(mac):
             ip = arp[mac]
@@ -351,8 +352,8 @@ def printRate():
             up = 'not_trace'
             down = 'not_trace'
         left_bytes = (limit[mac]['limit'] + rate[mac]['extra'] - up - down)
-        output = "%s\t%s\t%s\t%s\t%s\t%s+%s"%(limit[mac]['name'], mac, ip, up, down,limit[mac]['limit'],rate[mac]['extra'])
-        print(output.encode('utf-8'))
+        output = "%s\t%s\t%s\t%s\t%s\t%s+%s\t%s"%(limit[mac]['name'], mac, ip, up, down,limit[mac]['limit'],rate[mac]['extra'],left_bytes)
+        print(output)
 
 class FlagJob:
     '''try to do some thing when flag change'''
