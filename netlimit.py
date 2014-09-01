@@ -9,7 +9,7 @@ import time
 import traceback
 import signal
 
-subnet = '192.168.122.0/24'
+subnet = '192.168.1.0/24'
 pidfile = '/var/run/netlimit.pid'
 
 rundir=os.path.realpath(os.path.dirname(unicode(__file__, sys.getfilesystemencoding( ))))
