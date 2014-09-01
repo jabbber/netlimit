@@ -9,7 +9,7 @@ import time
 import traceback
 import signal
 
-subnet = '192.168.1.0/24'
+subnet = '192.168.122.0/24'
 pidfile = '/var/run/netlimit.pid'
 
 rundir=os.path.realpath(os.path.dirname(unicode(__file__, sys.getfilesystemencoding( ))))
@@ -206,10 +206,6 @@ def getRate():
                     downbyte = o_down - ratetab[mac]['o_down']
                 ratetab[mac]['down'] += downbyte
                 ratetab[mac]['o_down'] = o_down
-    return ratetab
-
-def sumRate():
-    ratetab = getRate()
     with open(ratefile,'w') as f:
         pickle.dump(ratetab,f)
     return ratetab
@@ -423,7 +419,7 @@ def stopDaemon():
     if os.path.isfile(pidfile):
         os.remove(pidfile)
     if isMonitor():
-        sumRate()
+        getRate()
         log('info',"current rate has been store")
     uninit()
     print 'stop success!'
@@ -475,14 +471,12 @@ def startDaemon():
     tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
     clear = FlagJob(clearRate,tm_mon)
     sum_extra = FlagJob(sumExtra,tm_mday)
-    store = FlagJob(sumRate,tm_min)
     up_ctrl = FlagJob(upCtrl,tm_sec)
     down_ctrl = FlagJob(downCtrl,tm_sec)
     error('info',"netlimit has been started.")
     while True:
         (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
         tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
-        store.do(tm_min)
         clear.do(tm_mon)
         sum_extra.do(tm_mday)
         up_ctrl.do(tm_sec)
