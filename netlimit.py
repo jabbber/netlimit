@@ -103,10 +103,10 @@ def init():
         #skip stat 1,iptables: Chain already exists.
         iptables(['-N', chain],[1])
     #skip stat 1 "iptables: No chain/target/match by that name."
-    iptables(['-D','FORWARD','-s',subnet,'!','-d',subnet,'-j','traffic-up'],[1])
-    iptables(['-D','FORWARD','-d',subnet,'!','-s',subnet,'-j','traffic-down'],[1])
-    iptables(['-I','FORWARD','-s',subnet,'!','-d',subnet,'-j','traffic-up'])
-    iptables(['-I','FORWARD','-d',subnet,'!','-s',subnet,'-j','traffic-down'])
+    iptables(['-D','FORWARD','-s',subnet,'-j','traffic-up'],[1])
+    iptables(['-D','FORWARD','-d',subnet,'-j','traffic-down'],[1])
+    iptables(['-I','FORWARD','-s',subnet,'-j','traffic-up'])
+    iptables(['-I','FORWARD','-d',subnet,'-j','traffic-down'])
     iptables(['-D','traffic-up','-j','REJECT','--reject-with','icmp-net-prohibited'],[1])
     iptables(['-A','traffic-up','-j','REJECT','--reject-with','icmp-net-prohibited'])
 
@@ -114,8 +114,8 @@ def uninit():
     '''del user chain to monitor traffic'''
     #skip stat 1 "iptables: No chain/target/match by that name."
     #skip stat 2,iptables v1.4.21: Couldn't load target `traffic-up':No such file or directory
-    iptables(['-D','FORWARD','-s',subnet,'!','-d',subnet,'-j','traffic-up'],[1,2])
-    iptables(['-D','FORWARD','-d',subnet,'!','-s',subnet,'-j','traffic-down'],[1,2])
+    iptables(['-D','FORWARD','-s',subnet,'-j','traffic-up'],[1,2])
+    iptables(['-D','FORWARD','-d',subnet,'-j','traffic-down'],[1,2])
     for chain in ('traffic-up','traffic-down'):
         #skip stat 1,iptables: No chain/target/match by that name.
         iptables(['-F', chain],[1])
@@ -125,7 +125,7 @@ def getUpChain():
     chain = 'traffic-up'
     #worning stat 3,iptables v1.4.21: can't initialize iptables table `filter': Permission denied (you must be root)
     #worning stat 1,iptables: No chain/target/match by that name.
-    output = iptables(['-L',chain,'-nv','--line-numbers'],warning = [1,3])
+    output = iptables(['-L',chain,'-nvx','--line-numbers'],warning = [1,3])
     if not output:
         return {}
     else:
@@ -146,7 +146,7 @@ def getDownChain():
     chain = 'traffic-down'
     #worning stat 3,iptables v1.4.21: can't initialize iptables table `filter': Permission denied (you must be root)
     #worning stat 1,iptables: No chain/target/match by that name.
-    output = iptables(['-L',chain,'-nv','--line-numbers'],warning = [1,3])
+    output = iptables(['-L',chain,'-nvx','--line-numbers'],warning = [1,3])
     if not output:
         return {}
     else:
