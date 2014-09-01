@@ -9,7 +9,7 @@ import time
 import traceback
 import signal
 
-subnet = '192.168.122.0/24'
+subnet = '192.168.1.0/24'
 pidfile = '/var/run/netlimit.pid'
 
 rundir=os.path.realpath(os.path.dirname(unicode(__file__, sys.getfilesystemencoding( ))))
@@ -94,7 +94,8 @@ def getArp():
             if re.match('^(?:[0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}$', line[3]):
                 mac = line[3].upper()
                 ip = line[0]
-                arptab[mac] = ip
+                if not arptab.has_key(mac):
+                    arptab[mac] = ip
     return arptab
 
 def init():
@@ -189,20 +190,22 @@ def getRate():
         if not ratetab.has_key(mac):
             ratetab[mac] = {'up':0,'o_up':0,'down':0,'o_down':0,'extra':0}
         if upChain.has_key(mac):
-            if ratetab[mac]['o_up'] > upChain[mac]['bytes']:
-                upbyte = int(upChain[mac]['bytes'])
+            o_up = int(upChain[mac]['bytes'])
+            if ratetab[mac]['o_up'] > o_up:
+                upbyte = o_up
             else:
-                upbyte = int(upChain[mac]['bytes']) - ratetab[mac]['o_up']
+                upbyte = o_up - ratetab[mac]['o_up']
             ratetab[mac]['up'] += upbyte
-            ratetab[mac]['o_up'] = int(upChain[mac]['bytes'])
+            ratetab[mac]['o_up'] = o_up
         if arptab.has_key(mac):
             if downChain.has_key(arptab[mac]):
-                if ratetab[mac]['o_down'] > downChain[arptab[mac]]['bytes']:
-                    downbyte = int(downChain[arptab[mac]]['bytes'])
+                o_down = int(downChain[arptab[mac]]['bytes'])
+                if ratetab[mac]['o_down'] > o_down:
+                    downbyte = o_down
                 else:
-                    downbyte = int(downChain[arptab[mac]]['bytes']) - ratetab[mac]['o_down']
+                    downbyte = o_down - ratetab[mac]['o_down']
                 ratetab[mac]['down'] += downbyte
-                ratetab[mac]['o_down'] = int(downChain[arptab[mac]]['bytes'])
+                ratetab[mac]['o_down'] = o_down
     return ratetab
 
 def sumRate():
