@@ -8,6 +8,7 @@ import pickle
 import time
 import traceback
 import signal
+import thread
 
 subnet = '192.168.1.0/24'
 pidfile = '/var/run/netlimit.pid'
@@ -351,7 +352,7 @@ def printRate():
             up = 'not_trace'
             down = 'not_trace'
         left_bytes = (limit[mac]['limit'] + rate[mac]['extra'] - up - down)
-        output = "%s\t%s\t%s\t%s\t%s\t%s+%s\t%s"%(limit[mac]['name'], mac, ip, up, down,limit[mac]['limit'],rate[mac]['extra'],left_bytes)
+        output = "%s\t%s\t%s\t%s\t%s\t%s+%s\t%s"%(limit[mac]['name'], mac, ip, sumUnit(up), sumUnit(down),sumUnit(limit[mac]['limit']),sumUnit(rate[mac]['extra']),sumUnit(left_bytes))
         print(output)
 
 class FlagJob:
@@ -385,6 +386,78 @@ def keepPid():
         error('error',traceback.print_exc())
         error('error',"can not write %s, process stop"%pidfile)
         sys.exit(4)
+
+def sumUnit(num):
+    num = int(num)
+    for n,unit in enumerate(('B','KB','MB','GB','TB')):
+        if num/(1024**n) < 1000:
+            return "%.2f%s"%(float(num)/(1024**n),unit)
+    return '%sB'%num
+
+def htmlStat():
+    rate = getRate()
+    limit = getLimit()
+    arp = getArp()
+    output = '''<html lang="zh-cn">
+<head>
+<meta charset="utf-8" />
+<meta name="author" content="Jabber Zhou" />
+</head>
+<body>
+<h1>
+netlimit (date rate monitor and quota)
+</h1>
+<table border='1'>
+<tr><th>name</th><th>mac</th><th>up today</th><th>down today</th><th>total</th><th>quota</th><th>left</th></tr>
+'''
+    for mac in limit:
+        if arp.has_key(mac):
+            ip = arp[mac]
+        else:
+            ip = 'not_alive'
+        if rate.has_key(mac):
+            up = rate[mac]['up']
+            down = rate[mac]['down']
+        else:
+            up = 0
+            down = 0
+        left_bytes = (limit[mac]['limit'] + rate[mac]['extra'] - up - down)
+        output += "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s+%s</td><td>%s</td></tr>\n"%(
+            limit[mac]['name'],mac,sumUnit(up),sumUnit(down),sumUnit(up+down),sumUnit(limit[mac]['limit']),sumUnit(rate[mac]['extra']),sumUnit(left_bytes))
+    output += '''</table>
+</body>
+</html>'''
+    return output
+
+def httpServe():
+    from BaseHTTPServer import BaseHTTPRequestHandler,HTTPServer
+
+    PORT_NUMBER = 8080
+
+    #This class will handles any incoming request from
+    #the browser
+    class myHandler(BaseHTTPRequestHandler):
+        #Handler for the GET requests
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header('Content-type','text/html')
+            self.end_headers()
+            # Send the html message
+            self.wfile.write(htmlStat())
+            return
+
+    try:
+        #Create a web server and define the handler to manage the
+        #incoming request
+        server = HTTPServer(('', PORT_NUMBER), myHandler)
+        print 'Started httpserver on port ' , PORT_NUMBER
+
+        #Wait forever for incoming htto requests
+        server.serve_forever()
+
+    except KeyboardInterrupt:
+        print '^C received, shutting down the web server'
+        server.socket.close()
 
 def isDaemon():
     if os.path.isfile(pidfile):
@@ -473,6 +546,7 @@ def startDaemon():
     sum_extra = FlagJob(sumExtra,tm_mday)
     up_ctrl = FlagJob(upCtrl,tm_sec)
     down_ctrl = FlagJob(downCtrl,tm_sec)
+    thread.start_new_thread(httpServe,())
     error('info',"netlimit has been started.")
     while True:
         (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
