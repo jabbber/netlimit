@@ -557,7 +557,8 @@ def startDaemon():
         (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
         tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
         clear.do(tm_mon)
-        sum_extra.do(tm_mday)
+        if tm_wday not in (5,6):
+            sum_extra.do(tm_mday)
         up_ctrl.do(tm_sec)
         down_ctrl.do(tm_sec)
         keepPid()
