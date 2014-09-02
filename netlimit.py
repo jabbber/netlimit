@@ -177,7 +177,7 @@ def isMonitor():
     else:
         return False
 
-def getRate():
+def readRate():
     '''sum current rate'''
     if os.path.isfile(ratefile):
         with open(ratefile,'r') as f:
@@ -207,6 +207,11 @@ def getRate():
                     downbyte = o_down - ratetab[mac]['o_down']
                 ratetab[mac]['down'] += downbyte
                 ratetab[mac]['o_down'] = o_down
+    return ratetab
+
+def getRate():
+    '''sum and save current rate'''
+    ratetab = readRate()
     with open(ratefile,'w') as f:
         pickle.dump(ratetab,f)
     return ratetab
@@ -336,7 +341,7 @@ def dayCtrl():
         return days
 
 def printRate():
-    rate = getRate()
+    rate = readRate()
     limit = getLimit()
     arp = getArp()
     print("name\tmac_address     \tip_address\tup\tdown\tquota\tleft_quota")
@@ -395,7 +400,7 @@ def sumUnit(num):
     return '%sB'%num
 
 def htmlStat():
-    rate = getRate()
+    rate = readRate()
     limit = getLimit()
     arp = getArp()
     output = '''<html lang="zh-cn">
