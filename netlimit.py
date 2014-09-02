@@ -228,12 +228,16 @@ def saveHRate(ratetab):
     with open(hratefile,'w') as f:
         pickle.dump(hratetab,f)
 
-def printHRate(mon,mday):
+def readHRate():
     if os.path.isfile(hratefile):
         with open(hratefile,'r') as f:
             hratetab = pickle.load(f)
     else:
         hratetab = {}
+    return hratetab
+
+def printHRate(mon,mday):
+    hratetab = readHRate()
     limittab = getLimit()
     if hratetab.has_key("%d-%d"%(mon,mday)):
         print("name\tmac_address     \tup\tdown\ttotal")
@@ -399,27 +403,13 @@ def sumUnit(num):
             return "%.2f%s"%(float(num)/(1024**n),unit)
     return '%sB'%num
 
-def htmlStat():
+def todayTable():
     rate = readRate()
     limit = getLimit()
-    arp = getArp()
-    output = '''<html lang="zh-cn">
-<head>
-<meta charset="utf-8" />
-<meta name="author" content="Jabber Zhou" />
-</head>
-<body>
-<h1>
-netlimit (date rate monitor and quota)
-</h1>
-<table border='1'>
-<tr><th>name</th><th>mac</th><th>up today</th><th>down today</th><th>total</th><th>quota</th><th>left</th></tr>
+    output = '''<table border='1'>
+<tr><th>name</th><th>mac</th><th>upload</th><th>download</th><th>total</th><th>quota</th><th>left</th>
 '''
     for mac in limit:
-        if arp.has_key(mac):
-            ip = arp[mac]
-        else:
-            ip = 'not_alive'
         if rate.has_key(mac):
             up = rate[mac]['up']
             down = rate[mac]['down']
@@ -429,8 +419,74 @@ netlimit (date rate monitor and quota)
         left_bytes = (limit[mac]['limit'] + rate[mac]['extra'] - up - down)
         output += "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s+%s</td><td>%s</td></tr>\n"%(
             limit[mac]['name'],mac,sumUnit(up),sumUnit(down),sumUnit(up+down),sumUnit(limit[mac]['limit']),sumUnit(rate[mac]['extra']),sumUnit(left_bytes))
-    output += '''</table>
-</body>
+    output += "</table>\n"
+    return output
+
+def monthTable():
+    (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
+    tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
+    hrate = readHRate()
+    hrate['%d-%d'%(tm_mon,tm_mday+1)] = readRate()
+    limit = getLimit()
+    output = '''<table border='1'>
+<tr><th>name</th><th>mac</th>
+'''
+    monthtab = {}
+    daytotal = []
+    for day in range(1,tm_mday+1):
+        output += "<th>%d</th>"%day
+        key = '%d-%d'%(tm_mon,day+1)
+        total = 0
+        if hrate.has_key(key):
+            for mac in hrate[key]:
+                if not monthtab.has_key(mac):
+                    monthtab[mac] = {}
+                monthtab[mac][day] = hrate[key][mac]['up'] + hrate[key][mac]['down']
+                total += monthtab[mac][day]
+        daytotal.append(total)
+    output += "<th>total</th></tr>\n"
+
+    for mac in monthtab:
+        monthtab[mac]['total'] = 0
+        name = 'none'
+        if limit.has_key(mac):
+            name = limit[mac]['name']
+        output += "<tr><td>%s</td><td>%s</td>"%(name,mac)
+        for day in range(1,tm_mday+1):
+            dayrate = 0
+            if monthtab[mac].has_key(day):
+                dayrate = monthtab[mac][day]
+                monthtab[mac]['total'] += dayrate
+            if dayrate:
+                output += "<td>%s</td>"%sumUnit(dayrate)
+            else:
+                output += "<td>-</td>"
+        output += "<td>%s</td></tr>\n"%sumUnit(monthtab[mac]['total'])
+
+    output += "<tr><td>total</td><td>-</td>"
+    total = 0
+    for num in daytotal:
+        total += num
+        output += "<td>%s</td>"%sumUnit(num)
+    output += "<td>%s</td></tr>\n"%sumUnit(total)
+    return output
+
+def htmlStat():
+    output = '''<html lang="zh-cn">
+<head>
+<meta charset="utf-8" />
+<meta name="author" content="Jabber Zhou" />
+</head>
+<body>
+<h1>
+netlimit (date rate monitor and quota)
+</h1>
+'''
+    output += "<h2>Today</h2>"
+    output += todayTable()
+    output += "<h2>This Month</h2>"
+    output += monthTable()
+    output += '''</body>
 </html>'''
     return output
 
