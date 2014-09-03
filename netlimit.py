@@ -418,7 +418,7 @@ def todayTable():
             down = 0
         left_bytes = (limit[mac]['limit'] + rate[mac]['extra'] - up - down)
         output += "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s+%s</td><td>%s</td></tr>\n"%(
-            limit[mac]['name'],mac,sumUnit(up),sumUnit(down),sumUnit(up+down),sumUnit(limit[mac]['limit']),sumUnit(rate[mac]['extra']),sumUnit(left_bytes))
+            limit[mac]['name'],mac[:-8]+'xx:xx:'+mac[-2:],sumUnit(up),sumUnit(down),sumUnit(up+down),sumUnit(limit[mac]['limit']),sumUnit(rate[mac]['extra']),sumUnit(left_bytes))
     output += "</table>\n"
     return output
 
@@ -451,7 +451,7 @@ def monthTable():
         name = 'none'
         if limit.has_key(mac):
             name = limit[mac]['name']
-        output += "<tr><td>%s</td><td>%s</td>"%(name,mac)
+        output += "<tr><td>%s</td><td>%s</td>"%(name,mac[:-8]+'xx:xx:'+mac[-2:])
         for day in range(1,tm_mday+1):
             dayrate = 0
             if monthtab[mac].has_key(day):
