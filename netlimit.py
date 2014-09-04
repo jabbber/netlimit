@@ -399,7 +399,7 @@ def keepPid():
 def sumUnit(num):
     num = int(num)
     for n,unit in enumerate(('B','KB','MB','GB','TB')):
-        if num/(1024**n) < 1000:
+        if num/(1024**n) < 1000 and num/(1024**n) > -1000:
             return "%.2f%s"%(float(num)/(1024**n),unit)
     return '%sB'%num
 
