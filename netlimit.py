@@ -216,9 +216,14 @@ def getRate():
         pickle.dump(ratetab,f)
     return ratetab
 
-def saveHRate(ratetab):
+def saveHRate():
     (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
     tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
+    if os.path.isfile(ratefile):
+        with open(ratefile,'r') as f:
+            ratetab = pickle.load(f)
+    else:
+        ratetab = {}
     if os.path.isfile(hratefile):
         with open(hratefile,'r') as f:
             hratetab = pickle.load(f)
@@ -258,7 +263,6 @@ def sumExtra():
     else:
         ratetab = {}
     limittab = getLimit()
-    saveHRate(ratetab)
     for mac in limittab:
         if ratetab.has_key(mac):
             num = limittab[mac]['limit'] - ratetab[mac]['up'] - ratetab[mac]['down']
@@ -604,6 +608,7 @@ def startDaemon():
     (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
     tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
     clear = FlagJob(clearRate,tm_mon)
+    save = FlagJob(saveHRate,ratetab,tm_mday)
     sum_extra = FlagJob(sumExtra,tm_mday)
     up_ctrl = FlagJob(upCtrl,tm_sec)
     down_ctrl = FlagJob(downCtrl,tm_sec)
@@ -613,6 +618,7 @@ def startDaemon():
         (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
         tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
         clear.do(tm_mon)
+        save.do(tm_mday)
         if tm_wday not in (5,6):
             sum_extra.do(tm_mday)
         up_ctrl.do(tm_sec)
