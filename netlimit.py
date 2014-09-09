@@ -608,7 +608,7 @@ def startDaemon():
     (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
     tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
     clear = FlagJob(clearRate,tm_mon)
-    save = FlagJob(saveHRate,ratetab,tm_mday)
+    save = FlagJob(saveHRate,tm_mday)
     sum_extra = FlagJob(sumExtra,tm_mday)
     up_ctrl = FlagJob(upCtrl,tm_sec)
     down_ctrl = FlagJob(downCtrl,tm_sec)
