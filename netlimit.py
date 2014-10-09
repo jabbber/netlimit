@@ -216,6 +216,19 @@ def getRate():
         pickle.dump(ratetab,f)
     return ratetab
 
+def clearRate():
+    '''clear mac not exist in limit.tab'''
+    ratetab = readRate()
+    limittab = getLimit()
+    for mac in ratetab:
+        if limittab.has_key(mac):
+            pass
+        else:
+            ratetab.pop(mac)
+    with open(ratefile,'w') as f:
+        pickle.dump(ratetab,f)
+    return ratetab
+
 def saveHRate():
     (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
     tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
@@ -458,17 +471,19 @@ def monthTable():
         name = 'none'
         if limit.has_key(mac):
             name = limit[mac]['name']
-        output += "<tr><td>%s</td><td>%s</td>"%(name,mac[:-8]+'xx:xx:'+mac[-2:])
+        line = "<tr><td>%s</td><td>%s</td>"%(name,mac[:-8]+'xx:xx:'+mac[-2:])
         for day in range(1,tm_mday+1):
             dayrate = 0
             if monthtab[mac].has_key(day):
                 dayrate = monthtab[mac][day]
                 monthtab[mac]['total'] += dayrate
             if dayrate:
-                output += "<td>%s</td>"%sumUnit(dayrate)
+                line += "<td>%s</td>"%sumUnit(dayrate)
             else:
-                output += "<td>-</td>"
-        output += "<td>%s</td></tr>\n"%sumUnit(monthtab[mac]['total'])
+                line += "<td>-</td>"
+        line += "<td>%s</td></tr>\n"%sumUnit(monthtab[mac]['total'])
+        if monthtab[mac]['total'] > 0:
+            output += line
 
     output += "<tr><td>total</td><td>-</td>"
     total = 0
@@ -652,6 +667,9 @@ if len(sys.argv) > 1:
         else:
             print('daemon is dead!')
             sys.exit(1)
+    elif sys.argv[1] == 'clear':
+        clearRate()
+        sys.exit(0)
     elif sys.argv[1] == 'hrate':
         if len(sys.argv) == 4:
             try:
