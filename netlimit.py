@@ -216,7 +216,7 @@ def getRate():
         pickle.dump(ratetab,f)
     return ratetab
 
-def clearRate():
+def clearMac():
     '''clear mac not exist in limit.tab'''
     ratetab = readRate()
     limittab = getLimit()
@@ -635,8 +635,8 @@ def startDaemon():
     while True:
         (tm_year,tm_mon,tm_mday,tm_hour,tm_min,
         tm_sec,tm_wday,tm_yday,tm_isdst) = time.localtime()
-        clear.do(tm_mon)
         save.do(tm_mday)
+        clear.do(tm_mon)
         sum_extra.do(tm_mday)
         up_ctrl.do(tm_sec)
         down_ctrl.do(tm_sec)
@@ -668,7 +668,7 @@ if len(sys.argv) > 1:
             print('daemon is dead!')
             sys.exit(1)
     elif sys.argv[1] == 'clear':
-        clearRate()
+        clearMac()
         sys.exit(0)
     elif sys.argv[1] == 'hrate':
         if len(sys.argv) == 4:
