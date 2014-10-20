@@ -296,6 +296,7 @@ def addExtra(mac,num):
     else:
         ratetab = {}
     limittab = getLimit()
+    mac = mac.upper()
     if ratetab.has_key(mac) and limittab.has_key(mac):
         ratetab[mac]['extra'] += num
         with open(ratefile,'w') as f:
