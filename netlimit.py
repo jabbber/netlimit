@@ -280,7 +280,7 @@ def sumExtra():
     limittab = getLimit()
     for mac in limittab:
         if ratetab.has_key(mac):
-            if tm_mday not in (5,6):
+            if tm_wday not in (5,6):
                 num = limittab[mac]['limit'] - ratetab[mac]['up'] - ratetab[mac]['down']
                 ratetab[mac]['extra'] += num
             ratetab[mac]['up'] = 0
