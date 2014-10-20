@@ -685,15 +685,16 @@ if len(sys.argv) > 1:
             sys.exit(1)
     elif sys.argv[1] == 'add':
         if len(sys.argv) == 4:
-            if getLimit().has_key(sys.argv[2]):
+            mac = sys.argv[2].upper()
+            if getLimit().has_key(mac):
                 try:
                     quota = int(sys.argv[3])
                 except:
                     print("'%s' is not a integer."%sys.argv[3])
                     sys.exit(2)
-                addExtra(sys.argv[2],quota)
+                addExtra(mac,quota)
             else:
-                print("'%s'is not a mac address exist in limit.tab"%sys.argv[2])
+                print("'%s'is not a mac address exist in limit.tab"%mac)
         else:
             print("'add' need a mac address and a num of bytes")
             sys.exit(1)
