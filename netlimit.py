@@ -280,12 +280,12 @@ def sumExtra():
     limittab = getLimit()
     for mac in limittab:
         if ratetab.has_key(mac):
-            if tm_wday not in (5,6):
+            if tm_wday not in (0,6):
                 num = limittab[mac]['limit'] - ratetab[mac]['up'] - ratetab[mac]['down']
                 ratetab[mac]['extra'] += num
+                error('info',"auto add extra %d bytes to %s[%s]"%(num,limittab[mac]['name'],mac))
             ratetab[mac]['up'] = 0
             ratetab[mac]['down'] = 0
-            error('info',"auto add extra %d bytes to %s[%s]"%(num,limittab[mac]['name'],mac))
     with open(ratefile,'w') as f:
         pickle.dump(ratetab,f)
 
