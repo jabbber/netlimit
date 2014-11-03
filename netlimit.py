@@ -192,7 +192,7 @@ def readRate():
             ratetab[mac] = {'up':0,'o_up':0,'down':0,'o_down':0,'extra':0}
         if upChain.has_key(mac):
             o_up = int(upChain[mac]['bytes'])
-            if ratetab[mac]['o_up'] > o_up:
+            if ratetab[mac]['o_up'] >= o_up:
                 upbyte = o_up
             else:
                 upbyte = o_up - ratetab[mac]['o_up']
@@ -201,7 +201,7 @@ def readRate():
         if arptab.has_key(mac):
             if downChain.has_key(arptab[mac]):
                 o_down = int(downChain[arptab[mac]]['bytes'])
-                if ratetab[mac]['o_down'] > o_down:
+                if ratetab[mac]['o_down'] >= o_down:
                     downbyte = o_down
                 else:
                     downbyte = o_down - ratetab[mac]['o_down']
