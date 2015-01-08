@@ -1,0 +1,15 @@
+[Unit]
+Description=iptables restore
+DefaultDependencies=false
+After=local-fs.target
+Conflicts=shutdown.target
+Before=sysinit.target shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/iptables-restore /etc/iptables.rules
+ExecStop=/usr/sbin/iptables -F
+
+[Install]
+WantedBy=multi-user.target

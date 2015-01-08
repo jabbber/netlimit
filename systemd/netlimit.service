@@ -1,0 +1,15 @@
+[Unit]
+Description=netlimit service
+DefaultDependencies=false
+After=local-fs.target iptables.service
+Conflicts=shutdown.target
+Before=sysinit.target shutdown.target
+
+[Service]
+Type=forking
+PIDFile=/var/run/netlimit.pid
+ExecStart=/opt/netlimit/netlimit.py start
+ExecStop=/opt/netlimit/netlimit.py stop
+
+[Install]
+WantedBy=multi-user.target
