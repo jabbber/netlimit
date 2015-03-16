@@ -245,6 +245,12 @@ def saveHRate():
     hratetab["%d-%d"%(tm_mon,tm_mday)] = ratetab
     with open(hratefile,'w') as f:
         pickle.dump(hratetab,f)
+    limittab = getLimit()
+    for mac in ratetab:
+        if not mac in limittab:
+            ratetab.pop(mac)
+    with open(ratefile,'w') as f:
+        pickle.dump(ratetab,f)
 
 def readHRate():
     if os.path.isfile(hratefile):
@@ -284,10 +290,8 @@ def sumExtra():
                 num = limittab[mac]['limit'] - ratetab[mac]['up'] - ratetab[mac]['down']
                 ratetab[mac]['extra'] += num
                 error('info',"auto add extra %d bytes to %s[%s]"%(num,limittab[mac]['name'],mac))
-            ratetab[mac]['up'] = 0
-            ratetab[mac]['down'] = 0
-        else:
-            ratetab.pop(mac)
+        ratetab[mac]['up'] = 0
+        ratetab[mac]['down'] = 0
     with open(ratefile,'w') as f:
         pickle.dump(ratetab,f)
 
