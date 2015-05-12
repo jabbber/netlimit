@@ -115,6 +115,8 @@ def init():
     iptables(['-I','FORWARD','-d',subnet,'-j','traffic-down'])
     iptables(['-D','traffic-up','-j','REJECT','--reject-with','icmp-net-prohibited'],[1])
     iptables(['-A','traffic-up','-j','REJECT','--reject-with','icmp-net-prohibited'])
+    iptables(['-D','traffic-down','-j','REJECT','--reject-with','icmp-net-prohibited'],[1])
+    iptables(['-A','traffic-down','-j','REJECT','--reject-with','icmp-net-prohibited'])
 
 def uninit():
     '''del user chain to monitor traffic'''
@@ -357,7 +359,7 @@ def downCtrl():
     for ip in ips:
         if not downchain.has_key(ip):
             #worning exit 3 "iptables v1.4.21: can't initialize iptables table `filter': Permission denied (you must be root)"
-            iptables(['-A',chain,'-d',ip,'-j','RETURN'],[3])
+            iptables(['-I',chain,'-d',ip,'-j','RETURN'],[3])
     for ip in downchain:
         if not ip in ips:
             iptables(['-D',chain,'-d',ip,'-j','RETURN'])
