@@ -20,6 +20,9 @@ ratefile=os.path.join(rundir,'rate.db')
 hratefile=os.path.join(rundir,'hrate.db')
 daemon = 0
 
+o_up = {}
+o_down = {}
+
 def error(level,content,reason=None):
     global daemon
     if daemon:
@@ -95,7 +98,9 @@ def getArp():
             if re.match('^(?:[0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}$', line[3]):
                 mac = line[3].upper()
                 ip = line[0]
-                arptab[mac] = ip
+                if not mac in arptab:
+                    arptab[mac] = []
+                arptab[mac].append(ip)
     return arptab
 
 def init():
@@ -178,6 +183,7 @@ def isMonitor():
 
 def readRate():
     '''sum current rate'''
+    global o_up, o_down
     if os.path.isfile(ratefile):
         with open(ratefile,'r') as f:
             ratetab = pickle.load(f)
@@ -187,25 +193,24 @@ def readRate():
     downChain = getDownChain()
     arptab = getArp()
     for mac in upChain:
-        if not ratetab.has_key(mac):
-            ratetab[mac] = {'up':0,'o_up':0,'down':0,'o_down':0,'extra':0}
-        if upChain.has_key(mac):
-            o_up = int(upChain[mac]['bytes'])
-            if ratetab[mac]['o_up'] > o_up:
-                upbyte = o_up
-            else:
-                upbyte = o_up - ratetab[mac]['o_up']
-            ratetab[mac]['up'] += upbyte
-            ratetab[mac]['o_up'] = o_up
-        if arptab.has_key(mac):
-            if downChain.has_key(arptab[mac]):
-                o_down = int(downChain[arptab[mac]]['bytes'])
-                if ratetab[mac]['o_down'] > o_down:
-                    downbyte = o_down
-                else:
-                    downbyte = o_down - ratetab[mac]['o_down']
-                ratetab[mac]['down'] += downbyte
-                ratetab[mac]['o_down'] = o_down
+        if not mac in ratetab:
+            ratetab[mac] = {'up':0,'down':0,'extra':0}
+        if mac in upChain:
+            up = int(upChain[mac]['bytes'])
+            if mac in o_up:
+                if o_up[mac] <= up:
+                    up -= o_up[mac]
+            ratetab[mac]['up'] += up
+            o_up[mac] = int(upChain[mac]['bytes'])
+        if mac in arptab:
+            for ip in arptab[mac]:
+                if ip in downChain:
+                    down = int(downChain[ip]['bytes'])
+                    if ip in o_down:
+                        if o_down[ip] <= down:
+                            down -= o_down[ip]
+                    o_down[ip] = int(downChain[ip]['bytes'])
+                    ratetab[mac]['down'] += down
     return ratetab
 
 def getRate():
@@ -345,7 +350,10 @@ def downCtrl():
     monitor_mac = getLimit().keys()
     downchain = getDownChain()
     arptab = getArp()
-    ips = [arptab[mac] for mac in arptab if mac in monitor_mac]
+    ips = []
+    for mac in arptab:
+        if mac in monitor_mac:
+            ips.extend(arptab[mac])
     for ip in ips:
         if not downchain.has_key(ip):
             #worning exit 3 "iptables v1.4.21: can't initialize iptables table `filter': Permission denied (you must be root)"
@@ -377,11 +385,11 @@ def dayCtrl():
 def printRate():
     rate = readRate()
     limit = getLimit()
-    arp = getArp()
+    arptab = getArp()
     print("name\tmac_address     \tip_address\tup\tdown\tquota\tleft_quota")
     for mac in limit:
-        if arp.has_key(mac):
-            ip = arp[mac]
+        if mac in arptab:
+            ip = ','.join(arptab[mac])
         else:
             ip = 'not_alive'
         if rate.has_key(mac):
