@@ -95,8 +95,7 @@ def getArp():
             if re.match('^(?:[0-9,a-f,A-F]{2}:){5}[0-9,a-f,A-F]{2}$', line[3]):
                 mac = line[3].upper()
                 ip = line[0]
-                if not arptab.has_key(mac):
-                    arptab[mac] = ip
+                arptab[mac] = ip
     return arptab
 
 def init():
@@ -544,6 +543,7 @@ def httpServe():
         #Create a web server and define the handler to manage the
         #incoming request
         server = HTTPServer(('', PORT_NUMBER), myHandler)
+        server.timeout = 10
         print 'Started httpserver on port ' , PORT_NUMBER
 
         #Wait forever for incoming htto requests
