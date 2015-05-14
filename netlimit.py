@@ -202,7 +202,7 @@ def readRate():
             if mac in o_up:
                 if o_up[mac] <= up:
                     up -= o_up[mac]
-            ratetab[mac]['up'] += up
+                ratetab[mac]['up'] += up
             o_up[mac] = int(upChain[mac]['bytes'])
         if mac in arptab:
             for ip in arptab[mac]:
@@ -211,7 +211,7 @@ def readRate():
                     if ip in o_down:
                         if o_down[ip] <= down:
                             down -= o_down[ip]
-                    o_down[ip] = int(downChain[ip]['bytes'])
+                        o_down[ip] = int(downChain[ip]['bytes'])
                     ratetab[mac]['down'] += down
     return ratetab
 
