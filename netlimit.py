@@ -211,8 +211,8 @@ def readRate():
                     if ip in o_down:
                         if o_down[ip] <= down:
                             down -= o_down[ip]
-                        o_down[ip] = int(downChain[ip]['bytes'])
-                    ratetab[mac]['down'] += down
+                        ratetab[mac]['down'] += down
+                    o_down[ip] = int(downChain[ip]['bytes'])
     return ratetab
 
 def getRate():
